@@ -235,10 +235,10 @@ internal sealed class TrayApp : ApplicationContext
         private readonly TrayApp _tray;
         private readonly ToolTip _tip = new();
         // Los logos no van en el repo (son marcas): se leen de las apps de Claude y Codex instaladas.
-        private readonly Icon? _claudeDark = LoadIcon("Claude_*", "Tray-Win32-Dark.ico");
-        private readonly Icon? _codexDark = LoadIcon("OpenAI.Codex_*", "chatgpt-tray-dark.ico");
-        private readonly Icon? _claudeLight = LoadIcon("Claude_*", "Tray-Win32.ico");
-        private readonly Icon? _codexLight = LoadIcon("OpenAI.Codex_*", "chatgpt-tray-light.ico");
+        private readonly Icon? _claudeDark = LoadIcon("Claude_", "Tray-Win32-Dark.ico");
+        private readonly Icon? _codexDark = LoadIcon("OpenAI.Codex_", "chatgpt-tray-dark.ico");
+        private readonly Icon? _claudeLight = LoadIcon("Claude_", "Tray-Win32.ico");
+        private readonly Icon? _codexLight = LoadIcon("OpenAI.Codex_", "chatgpt-tray-light.ico");
         private readonly WinEventProc _winEvent;
         private readonly nint _foregroundHook;
         private readonly nint _reorderHook;
@@ -505,20 +505,28 @@ internal sealed class TrayApp : ApplicationContext
             base.Dispose(disposing);
         }
 
-        // Busca el .ico en la versión más reciente del paquete instalado; si no está o no hay
-        // permiso para leer WindowsApps, devuelve null y se dibuja una etiqueta de texto.
+        // Busca el .ico en la carpeta del paquete instalado. WindowsApps no se puede listar, así que
+        // la carpeta sale del registro de paquetes del usuario. Si no está, se dibuja una etiqueta.
         private static Icon? LoadIcon(string package, string file)
         {
+            const string Packages = @"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages";
             try
             {
-                string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WindowsApps");
-                var path = new DirectoryInfo(root).EnumerateDirectories(package)
-                    .OrderByDescending(folder => folder.LastWriteTimeUtc)
-                    .Select(folder => Path.Combine(folder.FullName, "app", "resources", file))
+                using var packages = Registry.CurrentUser.OpenSubKey(Packages);
+                var path = (packages?.GetSubKeyNames() ?? [])
+                    .Where(name => name.StartsWith(package, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(name => name, StringComparer.OrdinalIgnoreCase)
+                    .Select(name =>
+                    {
+                        using var key = packages!.OpenSubKey(name);
+                        return key?.GetValue("PackageRootFolder") is string root
+                            ? Path.Combine(root, "app", "resources", file) : null;
+                    })
                     .FirstOrDefault(File.Exists);
                 return path is null ? null : new Icon(path);
             }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException)
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException
+                                          or System.Security.SecurityException)
             {
                 return null;
             }
