@@ -13,7 +13,8 @@ internal sealed record UsageReading(
     UsageWindow? Session = null,
     UsageWindow? Week = null,
     DateTimeOffset? Timestamp = null,
-    string? Error = null);
+    string? Error = null,
+    DateTimeOffset? RetryAt = null);
 
 internal static class UsageSources
 {
@@ -129,6 +130,16 @@ internal static class UsageSources
         using var response = await ClaudeClient.SendAsync(request);
         if (response.StatusCode == HttpStatusCode.Unauthorized)
             return null;
+
+        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            var now = DateTimeOffset.Now;
+            var retryAfter = response.Headers.RetryAfter;
+            var retryAt = retryAfter?.Delta is { } delay
+                ? now + delay
+                : retryAfter?.Date ?? now.AddMinutes(15);
+            return new(Error: $"limitado hasta {retryAt.ToLocalTime():HH:mm}", RetryAt: retryAt);
+        }
 
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync();

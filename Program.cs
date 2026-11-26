@@ -39,6 +39,7 @@ internal sealed class TrayApp : ApplicationContext
     private DateTimeOffset? _claudeAt;
     private DateTimeOffset? _codexAt;
     private DateTimeOffset _claudeDue = DateTimeOffset.MinValue;
+    private DateTimeOffset _claudeBlockedUntil = DateTimeOffset.MinValue;
     private TimeSpan _claudeWait = TimeSpan.FromMinutes(5);
     private UsagePanel? _panel;
     private bool _refreshing;
@@ -112,8 +113,8 @@ internal sealed class TrayApp : ApplicationContext
         await RefreshAllAsync();
     }
 
-    // Claude limita el endpoint de uso (HTTP 429): el sondeo automático lo consulta cada 5 min y,
-    // si falla, dobla la espera hasta 15 min. Actualizar a mano lo consulta siempre.
+    // El sondeo de Claude parte de 5 min y dobla la espera hasta 15 min si falla.
+    // El bloqueo indicado por el servidor también se aplica al actualizar a mano.
     private async Task RefreshAllAsync(bool manual = true)
     {
         if (_refreshing || _closing)
@@ -123,7 +124,8 @@ internal sealed class TrayApp : ApplicationContext
         try
         {
             UpdateDisplay();
-            bool readClaude = manual || DateTimeOffset.Now >= _claudeDue;
+            var now = DateTimeOffset.Now;
+            bool readClaude = now >= _claudeBlockedUntil && (manual || now >= _claudeDue);
             var claudeTask = readClaude ? UsageSources.ReadClaudeAsync() : Task.FromResult(_claude);
             var readings = await Task.WhenAll(claudeTask, Task.Run(UsageSources.ReadCodex));
             if (_closing)
@@ -132,10 +134,17 @@ internal sealed class TrayApp : ApplicationContext
             if (readClaude)
             {
                 ApplyReading(readings[0], ref _claude, ref _claudeAt);
-                _claudeWait = readings[0].Error is null
-                    ? TimeSpan.FromMinutes(5)
-                    : TimeSpan.FromMinutes(Math.Min(_claudeWait.TotalMinutes * 2, 15));
-                _claudeDue = DateTimeOffset.Now + _claudeWait;
+                if (readings[0].RetryAt is { } retryAt)
+                {
+                    _claudeBlockedUntil = _claudeDue = retryAt;
+                }
+                else
+                {
+                    _claudeWait = readings[0].Error is null
+                        ? TimeSpan.FromMinutes(5)
+                        : TimeSpan.FromMinutes(Math.Min(_claudeWait.TotalMinutes * 2, 15));
+                    _claudeDue = DateTimeOffset.Now + _claudeWait;
+                }
             }
             ApplyReading(readings[1], ref _codex, ref _codexAt);
         }
