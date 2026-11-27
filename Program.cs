@@ -758,7 +758,7 @@ internal sealed class TrayApp : ApplicationContext
                     : age.TotalDays < 1 ? $"{(long)age.TotalHours} h"
                     : (long)age.TotalDays == 1 ? "1 día"
                     : $"{(long)age.TotalDays} días";
-                Draw($"dato de hace {ago}", small, muted, 144, 225, 162, 18, right: true);
+                Draw($"Codex usado hace {ago}", small, muted, 144, 225, 162, 18, right: true);
             }
 
             void Section(string name, UsageReading reading, DateTimeOffset? lastGood, int y)
