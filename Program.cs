@@ -752,8 +752,13 @@ internal sealed class TrayApp : ApplicationContext
             e.Graphics.FillRectangle(trackBrush, ScalePixel(14), ScalePixel(219), ScalePixel(292), ScalePixel(1));
             if (_tray._codex.Timestamp is { } timestamp)
             {
-                long minutes = Math.Max(0, (long)(now - timestamp).TotalMinutes);
-                Draw($"dato de hace {minutes} min", small, muted, 144, 225, 162, 18, right: true);
+                var age = now - timestamp;
+                string ago = age.TotalMinutes < 1 ? "menos de 1 min"
+                    : age.TotalHours < 1 ? $"{(long)age.TotalMinutes} min"
+                    : age.TotalDays < 1 ? $"{(long)age.TotalHours} h"
+                    : (long)age.TotalDays == 1 ? "1 día"
+                    : $"{(long)age.TotalDays} días";
+                Draw($"dato de hace {ago}", small, muted, 144, 225, 162, 18, right: true);
             }
 
             void Section(string name, UsageReading reading, DateTimeOffset? lastGood, int y)
