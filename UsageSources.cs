@@ -165,30 +165,29 @@ internal static class UsageSources
         {
             string sessions = Path.Combine(Profile, ".codex", "sessions");
             string? latest = null;
-            DateTime latestWrite = DateTime.MinValue;
-            var today = DateTime.Today;
 
-            for (int daysAgo = 0; daysAgo < 7; daysAgo++)
+            // Recorre las carpetas yyyy\MM\dd de la más reciente a la más antigua y se queda con la
+            // primera que tenga sesiones. Codex comprime las sesiones antiguas como .jsonl.zst.
+            static IEnumerable<string> Descending(string path) => Directory.Exists(path)
+                ? Directory.EnumerateDirectories(path).OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
+                : [];
+            foreach (var day in Descending(sessions).SelectMany(Descending).SelectMany(Descending))
             {
-                var day = today.AddDays(-daysAgo);
-                string folder = Path.Combine(sessions, day.ToString(@"yyyy\\MM\\dd", CultureInfo.InvariantCulture));
-                if (!Directory.Exists(folder))
-                    continue;
-
-                foreach (var file in new DirectoryInfo(folder).EnumerateFiles("rollout-*.jsonl"))
-                {
-                    if (file.LastWriteTimeUtc > latestWrite)
-                    {
-                        latest = file.FullName;
-                        latestWrite = file.LastWriteTimeUtc;
-                    }
-                }
+                latest = new DirectoryInfo(day).EnumerateFiles("rollout-*.jsonl*")
+                    .Where(f => f.Name.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase)
+                                || f.Name.EndsWith(".jsonl.zst", StringComparison.OrdinalIgnoreCase))
+                    .MaxBy(f => f.LastWriteTimeUtc)?.FullName;
+                if (latest is not null)
+                    break;
             }
 
             if (latest is null)
                 return new(Error: "Sin sesiones recientes");
 
-            using var reader = new StreamReader(new FileStream(latest, FileMode.Open, FileAccess.Read, FileShare.ReadWrite));
+            Stream input = new FileStream(latest, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (latest.EndsWith(".zst", StringComparison.OrdinalIgnoreCase))
+                input = new ZstdSharp.DecompressionStream(input);
+            using var reader = new StreamReader(input);
             string? last = null;
             while (reader.ReadLine() is { } line)
             {
