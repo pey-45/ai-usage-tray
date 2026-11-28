@@ -26,7 +26,33 @@ Primera columna: sesión de 5 h. Segunda: semanal. Verde < 75 %, ámbar < 90 %, 
 - **Logos:** se leen de las apps de Claude y Codex instaladas desde la Microsoft Store (no se distribuyen
   aquí). Si no están, se muestra «Cl» / «Cx».
 
-## Requisitos y compilación
+## Instalación
+
+Descarga y ejecuta `AI-Usage-Tray-1.0.0-Setup.exe` desde las releases.
+El instalador coloca la aplicación en `%LOCALAPPDATA%\Programs\AI Usage Tray`,
+crea un acceso en el menú Inicio y no requiere permisos de administrador ni instalar .NET.
+La opción **Arrancar con Windows** está marcada por defecto y se puede desmarcar durante
+la instalación o cambiar después desde el menú de la aplicación.
+
+Para actualizar, cierra la aplicación y ejecuta el nuevo instalador. Conserva la carpeta
+y las opciones elegidas en la instalación anterior. Puedes desinstalarla desde la configuración
+de aplicaciones de Windows; también se elimina la entrada de inicio automático.
+
+## Generar el instalador
+
+En PowerShell, con el SDK de .NET 10 instalado:
+
+```powershell
+.\build-installer.ps1 -Version 1.0.0
+```
+
+El script publica la aplicación con .NET incluido y genera
+`artifacts\installer\AI-Usage-Tray-1.0.0-Setup.exe`, listo para adjuntar a una release.
+Si no encuentra `ISCC.exe` en el PATH, descarga una copia portable de Inno Setup 6.7.4
+en `.tools` y verifica su firma antes de ejecutarla. También puedes indicar un compilador
+existente con `-IsccPath 'C:\ruta\ISCC.exe'`.
+
+## Requisitos y compilación manual
 
 Windows 10/11, .NET 10 (SDK para compilar, runtime de escritorio para ejecutar), Claude Code con sesión
 iniciada y/o Codex CLI.
